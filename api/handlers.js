@@ -1,4 +1,5 @@
 'use strict'
+const { randomUUID } = require("crypto");
 
 const previousResults = new Map()
 
@@ -12,7 +13,7 @@ function extractBody (event) {
   return JSON.parse(event.body)
 }
 
-module.exports.sendResponse = (event) => {
+module.exports.sendResponse = async (event) => {
   const { name, answers } = extractBody(event)
   const correctQuestions = [3, 1, 0, 2]
 
@@ -44,5 +45,25 @@ module.exports.sendResponse = (event) => {
     headers: {
       'Content-Type': 'application/json'
     }
+  }
+}
+
+module.exports.getResult = async (event) => {
+  const result = previousResults.get(event.pathParameters.id)
+  if (!result) {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ error: 'Result not found' }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }
+  }
+  return {
+    statusCode: 200,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(result)
   }
 }
