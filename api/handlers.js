@@ -31,7 +31,7 @@ module.exports.sendResponse = async (event) => {
   }
 
   const resultId = randomUUID()
-  previousResults.set(resultId, { response: req.body, result })
+  previousResults.set(resultId, { response: { name, answers }, result })
 
   return {
     statusCode: 201,
