@@ -1,33 +1,8 @@
 "use strict";
-const { pbkdf2Sync } = require("crypto");
-const { sign, verify } = require("jsonwebtoken");
 const { buildResponse } = require("./utils");
-const { getUserByCredentials, saveResultsToDatabase, getResultById } = require('./database')
-
-async function authorize(event) {
-  const { authorization } = event.headers;
-  if (!authorization) {
-    return buildResponse(401, {
-      error: "Missing authorization header",
-    });
-  }
-
-  const [type, token] = authorization.split(" ");
-  if (type !== "Bearer" || !token) {
-    return buildResponse(401, {
-      error: "Unsupported authorization type",
-    });
-  }
-
-  const decodedToken = verify(token, process.env.JWT_SECRET, {
-    audience: "alura-serverless",
-  });
-  if (!decodedToken) {
-    return buildResponse(401, { error: "Invalid Token" });
-  }
-
-  return decodedToken;
-}
+const { getUserByCredentials, saveResultsToDatabase, getResultById } = require('./database');
+const { makeHash, authorize, createToken } = require("./auth");
+const { countCorrectAnswers } = require("./responses");
 
 function extractBody(event) {
   if (!event?.body) {
@@ -38,15 +13,9 @@ function extractBody(event) {
 
 module.exports.login = async (event) => {
   const { username, password } = extractBody(event);
-  const hashedPass = pbkdf2Sync(
-    password,
-    process.env.SALT,
-    100000,
-    64,
-    "sha512"
-  ).toString("hex");
+  const hashedPass = makeHash(password)
 
-  const user = getUserByCredentials(username, hashedPass)
+  const user = await getUserByCredentials(username, hashedPass)
 
   if (!user) {
     return buildResponse(401, {
@@ -54,34 +23,15 @@ module.exports.login = async (event) => {
     })
   }
 
-  const token = sign({ username, id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: "24h",
-    audience: "alura-serverless",
-  });
-
-  return buildResponse(200, { token })
+  return buildResponse(200, { token: createToken(username, user._id) })
 };
 
 module.exports.sendResponse = async (event) => {
   const authResult = await authorize(event);
   if (authResult.statusCode === 401) return authResult;
 
-  const { name, answers } = extractBody(event);
-  const correctQuestions = [3, 1, 0, 2];
-
-  const totalCorrectAnswers = answers.reduce((acc, answer, index) => {
-    if (answer === correctQuestions[index]) {
-      acc++;
-    }
-    return acc;
-  }, 0);
-
-  const result = {
-    name,
-    answers,
-    totalCorrectAnswers,
-    totalAnswers: answers.length,
-  };
+  const { name, answers } = extractBody(event)
+  const result = countCorrectAnswers(name, answers)
 
   const insertedId = await saveResultsToDatabase(result)
 
