@@ -2,13 +2,20 @@
 const { MongoClient, ObjectId } = require('mongodb')
 const { pbkdf2Sync } = require('crypto')
 
+let connectionInstance = null
+
 async function connectToDatabase () {
+  if (connectionInstance) return connectionInstance
+
   const client = new MongoClient(process.env.MONGODB_CONNECTIONSTRING)
   const connection = await client.connect()
-  return connection.db(process.env.MONGODB_DB_NAME)
+  connectionInstance = connection.db(process.env.MONGODB_DB_NAME)
+  return connectionInstance
 }
 
 async function basicAuth (event) {
+  console.log("EVENTO NO BASIC AUTH", event);
+  console.log("EVENTO HEADERS", event.headers);
   const { authorization } = event.headers
   if (!authorization) {
     return {
@@ -40,6 +47,7 @@ async function basicAuth (event) {
   })
 
   if (!user) {
+    console.log("ENTROU USER");
     return {
       statusCode: 401,
       body: JSON.stringify({
